@@ -51,7 +51,7 @@ func init() {
 			folder: cfg.KWalletFolder,
 		}
 
-		return ring, ring.openWallet()
+		return ring, nil
 	})
 }
 
@@ -94,13 +94,10 @@ func (k *kwalletKeyring) Get(key string) (Item, error) {
 		return Item{}, ErrKeyNotFound
 	}
 
-	item := Item{}
-	err = json.Unmarshal(data, &item)
-	if err != nil {
-		return Item{}, err
-	}
-
-	return item, nil
+	return Item{
+		Key:  key,
+		Data: []byte(data),
+	}, nil
 }
 
 // GetMetadata for kwallet returns an error indicating that it's unsupported
@@ -114,6 +111,7 @@ func (k *kwalletKeyring) GetMetadata(_ string) (Metadata, error) {
 }
 
 func (k *kwalletKeyring) Set(item Item) error {
+	panic("not implemented")
 	err := k.openWallet()
 	if err != nil {
 		return err
@@ -227,11 +225,11 @@ func (k *kwalletBinding) RemoveEntry(handle int32, folder string, key string, ap
 }
 
 // method QByteArray org.kde.KWallet.readEntry(int handle, QString folder, QString key, QString appid)
-func (k *kwalletBinding) ReadEntry(handle int32, folder string, key string, appid string) ([]byte, error) {
-	call := k.dbus.Call("org.kde.KWallet.readEntry", 0, handle, folder, key, appid)
+func (k *kwalletBinding) ReadEntry(handle int32, folder string, key string, appid string) (string, error) {
+	call := k.dbus.Call("org.kde.KWallet.readPassword", 0, handle, folder, key, appid)
 	if call.Err != nil {
-		return []byte{}, call.Err
+		return "", call.Err
 	}
 
-	return call.Body[0].([]byte), call.Err
+	return call.Body[0].(string), call.Err
 }

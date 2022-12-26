@@ -152,13 +152,10 @@ func (k *secretsKeyring) Get(key string) (Item, error) {
 		return Item{}, err
 	}
 
-	// pack the secret into the item
-	var ret Item
-	if err = json.Unmarshal(secret.Value, &ret); err != nil {
-		return Item{}, err
-	}
-
-	return ret, err
+	return Item{
+		Data: secret.Value,
+		Key:  key,
+	}, nil
 }
 
 // GetMetadata for libsecret returns an error indicating that it's unsupported
@@ -174,6 +171,7 @@ func (k *secretsKeyring) GetMetadata(key string) (Metadata, error) {
 }
 
 func (k *secretsKeyring) Set(item Item) error {
+	panic("not implemented")
 	err := k.openSecrets()
 	if err != nil {
 		return err
