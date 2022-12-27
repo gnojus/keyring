@@ -8,27 +8,26 @@ import (
 // ReadPassword tries to read a password written by appName using qtkeychain.
 func ReadPassword(appName, appDisplayName, key string) (string, error) {
 	keyrings := []BackendType{}
+	conf := Config{
+		KWalletAppID:            appDisplayName,
+		KWalletFolder:           appName,
+		WinCredPrefix:           appName,
+		LibSecretCollectionName: appName,
+	}
 	switch runtime.GOOS {
 	case "windows":
 		keyrings = []BackendType{WinCredBackend}
 	case "darwin":
 		keyrings = []BackendType{KeychainBackend}
+		conf.ServiceName = appName
 	default:
 		keyrings = []BackendType{SecretServiceBackend, KWalletBackend}
 		if os.Getenv("XDG_CURRENT_DESKTOP") == "KDE" {
 			keyrings[0], keyrings[1] = keyrings[1], keyrings[0]
 		}
 	}
-	k, err := Open(Config{
-		AllowedBackends: keyrings,
-
-		KWalletAppID: appDisplayName,
-
-		KWalletFolder:           appName,
-		ServiceName:             appName,
-		WinCredPrefix:           appName,
-		LibSecretCollectionName: appName,
-	})
+	conf.AllowedBackends = keyrings
+	k, err := Open(conf)
 	if err != nil {
 		return "", err
 	}
