@@ -25,7 +25,7 @@ func ReadPassword(appName, appDisplayName, key string) (string, error) {
 		KWalletAppID: appDisplayName,
 
 		KWalletFolder:           appName,
-		KeychainName:            appName,
+		ServiceName:             appName,
 		WinCredPrefix:           appName,
 		LibSecretCollectionName: appName,
 	})
