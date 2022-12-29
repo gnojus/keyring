@@ -20,18 +20,12 @@ type windowsKeyring struct {
 
 func init() {
 	supportedBackends[WinCredBackend] = opener(func(cfg Config) (Keyring, error) {
-		name := cfg.ServiceName
-		if name == "" {
-			name = "default"
-		}
-
 		prefix := cfg.AppName
 		if prefix == "" {
 			prefix = "keyring"
 		}
 
 		return &windowsKeyring{
-			name:   name,
 			prefix: prefix,
 		}, nil
 	})
@@ -94,5 +88,5 @@ func (k *windowsKeyring) Keys() ([]string, error) {
 }
 
 func (k *windowsKeyring) credentialName(key string) string {
-	return k.prefix + ":" + k.name + ":" + key
+	return k.prefix + "_" + key
 }
