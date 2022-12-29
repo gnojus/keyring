@@ -5,6 +5,9 @@ type Config struct {
 	// AllowedBackends is a whitelist of backend providers that can be used. Nil means all available.
 	AllowedBackends []BackendType
 
+	// AppName is a name of that app that the secret belongs to.
+	AppName string
+
 	// ServiceName is a generic service name that is used by backends that support the concept
 	ServiceName string
 
@@ -37,9 +40,6 @@ type Config struct {
 
 	// KWalletAppID is the application id for KWallet
 	KWalletAppID string
-
-	// KWalletFolder is the folder for KWallet
-	KWalletFolder string
 
 	// LibSecretCollectionName is the name collection in secret-service
 	LibSecretCollectionName string

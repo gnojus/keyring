@@ -35,8 +35,8 @@ func init() {
 			cfg.KWalletAppID = "keyring"
 		}
 
-		if cfg.KWalletFolder == "" {
-			cfg.KWalletFolder = "keyring"
+		if cfg.AppName == "" {
+			cfg.AppName = "keyring"
 		}
 
 		wallet, err := newKwallet()
@@ -48,7 +48,7 @@ func init() {
 			wallet: *wallet,
 			name:   cfg.ServiceName,
 			appID:  cfg.KWalletAppID,
-			folder: cfg.KWalletFolder,
+			folder: cfg.AppName,
 		}
 
 		return ring, nil

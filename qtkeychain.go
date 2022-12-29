@@ -9,17 +9,14 @@ import (
 func ReadPassword(appName, appDisplayName, key string) (string, error) {
 	keyrings := []BackendType{}
 	conf := Config{
-		KWalletAppID:            appDisplayName,
-		KWalletFolder:           appName,
-		WinCredPrefix:           appName,
-		LibSecretCollectionName: appName,
+		KWalletAppID: appDisplayName,
+		AppName:      appName,
 	}
 	switch runtime.GOOS {
 	case "windows":
 		keyrings = []BackendType{WinCredBackend}
 	case "darwin":
 		keyrings = []BackendType{KeychainBackend}
-		conf.ServiceName = appName
 	default:
 		keyrings = []BackendType{SecretServiceBackend, KWalletBackend}
 		if os.Getenv("XDG_CURRENT_DESKTOP") == "KDE" {

@@ -25,7 +25,7 @@ func init() {
 			name = "default"
 		}
 
-		prefix := cfg.WinCredPrefix
+		prefix := cfg.AppName
 		if prefix == "" {
 			prefix = "keyring"
 		}

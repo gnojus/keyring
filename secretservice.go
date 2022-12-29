@@ -5,49 +5,40 @@ package keyring
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"errors"
+	"fmt"
 
 	"strings"
 
-	"github.com/godbus/dbus"
-	"github.com/gsterjov/go-libsecret"
+	"github.com/godbus/dbus/v5"
+	dbkeyring "github.com/ppacher/go-dbus-keyring"
 )
 
 func init() {
 	// silently fail if dbus isn't available
-	_, err := dbus.SessionBus()
+	bus, err := dbus.SessionBus()
 	if err != nil {
 		return
 	}
 
 	supportedBackends[SecretServiceBackend] = opener(func(cfg Config) (Keyring, error) {
-		if cfg.ServiceName == "" {
-			cfg.ServiceName = "secret-service"
-		}
-		if cfg.LibSecretCollectionName == "" {
-			cfg.LibSecretCollectionName = cfg.ServiceName
-		}
-
-		service, err := libsecret.NewService()
-		if err != nil {
-			return &secretsKeyring{}, err
-		}
-
+		service, err := dbkeyring.GetSecretService(bus)
 		ring := &secretsKeyring{
-			name:    cfg.LibSecretCollectionName,
-			service: service,
+			name: cfg.AppName,
 		}
-
-		return ring, ring.openSecrets()
+		if err != nil {
+			return ring, err
+		}
+		ring.service = service
+		ring.session, err = service.OpenSession()
+		return ring, err
 	})
 }
 
 type secretsKeyring struct {
-	name       string
-	service    *libsecret.Service
-	collection *libsecret.Collection
-	session    *libsecret.Session
+	name    string
+	session dbkeyring.Session
+	service dbkeyring.SecretService
 }
 
 var errCollectionNotFound = errors.New("The collection does not exist. Please add a key first")
@@ -73,88 +64,33 @@ func decodeKeyringString(src string) string {
 	return dst.String()
 }
 
-func (k *secretsKeyring) openSecrets() error {
-	session, err := k.service.Open()
-	if err != nil {
-		return err
-	}
-	k.session = session
-
-	// get the collection if it already exists
-	collections, err := k.service.Collections()
-	if err != nil {
-		return err
-	}
-
-	path := libsecret.DBusPath + "/collection/" + k.name
-
-	for _, collection := range collections {
-		if decodeKeyringString(string(collection.Path())) == path {
-			c := collection // fix variable into the local variable to ensure it's referenced correctly, see https://github.com/kyoh86/exportloopref
-			k.collection = &c
-			return nil
-		}
-	}
-
-	return nil
-}
-
-func (k *secretsKeyring) openCollection() error {
-	if err := k.openSecrets(); err != nil {
-		return err
-	}
-
-	if k.collection == nil {
-		return errCollectionNotFound
-		// return &secretsError{fmt.Sprintf(
-		// 	"The collection %q does not exist. Please add a key first",
-		// 	k.name,
-		// )}
-	}
-
-	return nil
-}
-
 func (k *secretsKeyring) Get(key string) (Item, error) {
-	if err := k.openCollection(); err != nil {
-		if err == errCollectionNotFound {
-			return Item{}, ErrKeyNotFound
-		}
-		return Item{}, err
-	}
-
-	items, err := k.collection.SearchItems(key)
+	ul, lo, err := k.service.SearchItems(map[string]string{
+		"server": k.name,
+		"user":   key,
+	})
 	if err != nil {
-		return Item{}, err
+		return Item{}, fmt.Errorf("searching for items: %w", err)
+	}
+	items := append(ul, lo...)
+	if len(items) != 1 {
+		return Item{}, fmt.Errorf("found %d items instead of 1", len(items))
 	}
 
-	if len(items) == 0 {
-		return Item{}, ErrKeyNotFound
-	}
-
-	// use the first item whenever there are multiples
-	// with the same profile name
-	item := items[0]
-
-	locked, err := item.Locked()
-	if err != nil {
-		return Item{}, err
-	}
-
-	if locked {
-		if err := k.service.Unlock(item); err != nil {
-			return Item{}, err
+	if len(ul) == 0 {
+		_, err = items[0].Unlock()
+		if err != nil {
+			return Item{}, fmt.Errorf("unlocking item: %w", err)
 		}
 	}
 
-	secret, err := item.GetSecret(k.session)
+	secret, err := items[0].GetSecret(k.session.Path())
 	if err != nil {
-		return Item{}, err
+		return Item{}, fmt.Errorf("getting secret: %w", err)
 	}
-
 	return Item{
-		Data: secret.Value,
 		Key:  key,
+		Data: secret.Value,
 	}, nil
 }
 
@@ -172,120 +108,12 @@ func (k *secretsKeyring) GetMetadata(key string) (Metadata, error) {
 
 func (k *secretsKeyring) Set(item Item) error {
 	panic("not implemented")
-	err := k.openSecrets()
-	if err != nil {
-		return err
-	}
-
-	// create the collection if it doesn't already exist
-	if k.collection == nil {
-		collection, err := k.service.CreateCollection(k.name)
-		if err != nil {
-			return err
-		}
-
-		k.collection = collection
-	}
-
-	if err := k.ensureCollectionUnlocked(); err != nil {
-		return err
-	}
-
-	// create the new item
-	data, err := json.Marshal(item)
-	if err != nil {
-		return err
-	}
-
-	secret := libsecret.NewSecret(k.session, []byte{}, data, "application/json")
-
-	if _, err := k.collection.CreateItem(item.Key, secret, true); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (k *secretsKeyring) Remove(key string) error {
-	if err := k.openCollection(); err != nil {
-		if err == errCollectionNotFound {
-			return ErrKeyNotFound
-		}
-		return err
-	}
-
-	items, err := k.collection.SearchItems(key)
-	if err != nil {
-		return err
-	}
-
-	// nothing to delete
-	if len(items) == 0 {
-		return nil
-	}
-
-	// we dont want to delete more than one anyway
-	// so just get the first item found
-	item := items[0]
-
-	locked, err := item.Locked()
-	if err != nil {
-		return err
-	}
-
-	if locked {
-		if err := k.service.Unlock(item); err != nil {
-			return err
-		}
-	}
-
-	if err := item.Delete(); err != nil {
-		return err
-	}
-
-	return nil
+	panic("not implemented")
 }
 
 func (k *secretsKeyring) Keys() ([]string, error) {
-	if err := k.openCollection(); err != nil {
-		if err == errCollectionNotFound {
-			return []string{}, nil
-		}
-		return nil, err
-	}
-	if err := k.ensureCollectionUnlocked(); err != nil {
-		return nil, err
-	}
-	items, err := k.collection.Items()
-	if err != nil {
-		return nil, err
-	}
-	keys := []string{}
-	for _, item := range items {
-		label, err := item.Label() // FIXME: err is being silently ignored
-		if err == nil {
-			keys = append(keys, label)
-		}
-	}
-	return keys, nil
-}
-
-// deleteCollection deletes the keyring's collection if it exists. This is mainly to support testing.
-func (k *secretsKeyring) deleteCollection() error {
-	if err := k.openCollection(); err != nil {
-		return err
-	}
-	return k.collection.Delete()
-}
-
-// unlock the collection if it's locked
-func (k *secretsKeyring) ensureCollectionUnlocked() error {
-	locked, err := k.collection.Locked()
-	if err != nil {
-		return err
-	}
-	if !locked {
-		return nil
-	}
-	return k.service.Unlock(k.collection)
+	panic("not implemented")
 }

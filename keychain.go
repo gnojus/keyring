@@ -24,7 +24,7 @@ type keychain struct {
 func init() {
 	supportedBackends[KeychainBackend] = opener(func(cfg Config) (Keyring, error) {
 		kc := &keychain{
-			service:      cfg.ServiceName,
+			service:      cfg.AppName,
 			passwordFunc: cfg.KeychainPasswordFunc,
 
 			// Set the isAccessibleWhenUnlocked to the boolean value of
