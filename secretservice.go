@@ -69,24 +69,35 @@ func (k *secretsKeyring) Get(key string) (Item, error) {
 		"server": k.name,
 		"user":   key,
 	})
+	if Debug {
+		c, err := k.service.GetAllCollections()
+		labels := []string{}
+		if err == nil {
+			for _, c := range c {
+				l, _ := c.GetLabel()
+				labels = append(labels, l)
+			}
+			debugf("collections: %q", labels)
+		}
+	}
 	if err != nil {
-		return Item{}, fmt.Errorf("searching for items: %w", err)
+		return Item{}, fmt.Errorf("libsecret: searching failed: %w", err)
 	}
 	items := append(ul, lo...)
 	if len(items) != 1 {
-		return Item{}, fmt.Errorf("found %d items instead of 1", len(items))
+		return Item{}, fmt.Errorf("libsecret: found %d items instead of 1", len(items))
 	}
 
 	if len(ul) == 0 {
 		_, err = items[0].Unlock()
 		if err != nil {
-			return Item{}, fmt.Errorf("unlocking item: %w", err)
+			return Item{}, fmt.Errorf("libsecret: unlocking item: %w", err)
 		}
 	}
 
 	secret, err := items[0].GetSecret(k.session.Path())
 	if err != nil {
-		return Item{}, fmt.Errorf("getting secret: %w", err)
+		return Item{}, fmt.Errorf("libsecret: getting secret: %w", err)
 	}
 	return Item{
 		Key:  key,
